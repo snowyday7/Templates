@@ -1,0 +1,253 @@
+# Pre-commit配置文件
+# 在每次git commit前自动运行代码质量检查
+
+repos:
+  # 基础代码检查
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # 检查文件是否以换行符结尾
+      - id: end-of-file-fixer
+        exclude: \.min\.(js|css)$
+      # 移除行尾空白字符
+      - id: trailing-whitespace
+        exclude: \.min\.(js|css)$
+      # 检查合并冲突标记
+      - id: check-merge-conflict
+      # 检查YAML文件语法
+      - id: check-yaml
+        args: ['--unsafe']
+      # 检查JSON文件语法
+      - id: check-json
+      # 检查TOML文件语法
+      - id: check-toml
+      # 检查XML文件语法
+      - id: check-xml
+      # 检查是否有大文件
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      # 检查Python AST语法
+      - id: check-ast
+      # 检查内置类型注解
+      - id: check-builtin-literals
+      # 检查文档字符串是否在第一行
+      - id: check-docstring-first
+      # 检查可执行文件是否有shebang
+      - id: check-executables-have-shebangs
+      # 检查是否有私钥
+      - id: detect-private-key
+      # 检查是否有AWS凭证
+      - id: detect-aws-credentials
+        args: ['--allow-missing-credentials']
+      # 修复Python编码声明
+      - id: fix-encoding-pragma
+        args: ['--remove']
+      # 检查requirements.txt格式
+      - id: requirements-txt-fixer
+      # 排序简单的case
+      - id: file-contents-sorter
+        files: '^(requirements.*\.txt|\.gitignore)$'
+
+  # Python代码格式化 - Black
+  - repo: https://github.com/psf/black
+    rev: 23.11.0
+    hooks:
+      - id: black
+        language_version: python3
+        args: ['--line-length=88']
+        files: \.py$
+
+  # Python导入排序 - isort
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        args: ['--profile=black', '--line-length=88']
+        files: \.py$
+
+  # Python代码检查 - Flake8
+  - repo: https://github.com/pycqa/flake8
+    rev: 6.1.0
+    hooks:
+      - id: flake8
+        args: [
+          '--max-line-length=88',
+          '--extend-ignore=E203,W503,E501',
+          '--exclude=.git,__pycache__,docs/source/conf.py,old,build,dist,.venv,venv,env,.tox,.eggs,*.egg'
+        ]
+        additional_dependencies:
+          - flake8-docstrings
+          - flake8-import-order
+          - flake8-bugbear
+          - flake8-comprehensions
+          - flake8-simplify
+
+  # Python类型检查 - MyPy
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        args: [
+          '--ignore-missing-imports',
+          '--disallow-untyped-defs',
+          '--no-implicit-optional',
+          '--warn-return-any',
+          '--warn-unused-ignores'
+        ]
+        additional_dependencies:
+          - types-requests
+          - types-PyYAML
+          - types-redis
+          - types-setuptools
+        files: ^templates/.*\.py$
+
+  # Python安全检查 - Bandit
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.7.5
+    hooks:
+      - id: bandit
+        args: ['-r', 'templates/', '-f', 'json']
+        exclude: tests/
+
+  # Python依赖安全检查 - Safety
+  - repo: https://github.com/Lucas-C/pre-commit-hooks-safety
+    rev: v1.3.2
+    hooks:
+      - id: python-safety-dependencies-check
+        files: requirements.*\.txt$
+
+  # 文档字符串检查 - pydocstyle
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: 6.3.0
+    hooks:
+      - id: pydocstyle
+        args: [
+          '--convention=google',
+          '--add-ignore=D100,D101,D102,D103,D104,D105,D106,D107'
+        ]
+        files: ^templates/.*\.py$
+
+  # Jupyter Notebook清理
+  - repo: https://github.com/nbQA-dev/nbQA
+    rev: 1.7.1
+    hooks:
+      - id: nbqa-black
+        additional_dependencies: [black==23.11.0]
+      - id: nbqa-isort
+        additional_dependencies: [isort==5.12.0]
+      - id: nbqa-flake8
+        additional_dependencies: [flake8==6.1.0]
+
+  # 清理Jupyter Notebook输出
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.6.1
+    hooks:
+      - id: nbstripout
+
+  # YAML格式化
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v3.1.0
+    hooks:
+      - id: prettier
+        types_or: [yaml, markdown]
+        exclude: '^(CHANGELOG\.md|templates/.*\.md)$'
+
+  # Shell脚本检查
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.9.0.6
+    hooks:
+      - id: shellcheck
+        args: ['-e', 'SC1091']
+
+  # Dockerfile检查
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        args: ['--ignore', 'DL3008', '--ignore', 'DL3009']
+
+  # 提交消息检查
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.13.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  # 密钥和敏感信息检查
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: .*\.lock$|package-lock\.json$
+
+  # Python升级语法
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.15.0
+    hooks:
+      - id: pyupgrade
+        args: ['--py38-plus']
+
+  # 删除未使用的导入
+  - repo: https://github.com/pycqa/autoflake
+    rev: v2.2.1
+    hooks:
+      - id: autoflake
+        args: [
+          '--in-place',
+          '--remove-all-unused-imports',
+          '--remove-unused-variables',
+          '--remove-duplicate-keys',
+          '--ignore-init-module-imports'
+        ]
+
+  # 检查Python导入循环
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+        name: isort-check-circular-imports
+        args: ['--check-only', '--diff', '--circular']
+
+# 全局配置
+default_stages: [commit]
+default_language_version:
+  python: python3.8
+
+# 排除的文件和目录
+exclude: |
+  (?x)^(
+      \.git/.*|
+      \.venv/.*|
+      venv/.*|
+      env/.*|
+      \.tox/.*|
+      build/.*|
+      dist/.*|
+      \.eggs/.*|
+      .*\.egg-info/.*|
+      __pycache__/.*|
+      \.pytest_cache/.*|
+      \.mypy_cache/.*|
+      htmlcov/.*|
+      \.coverage.*|
+      node_modules/.*|
+      \.min\.(js|css)$|
+      examples/output/.*|
+      examples/generated/.*|
+      docs/_build/.*|
+      site/.*
+  )$
+
+# CI配置
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false

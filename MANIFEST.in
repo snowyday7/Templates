@@ -1,0 +1,82 @@
+# Include the README and other documentation files
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+include requirements.txt
+include requirements-dev.txt
+include setup.py
+include pyproject.toml
+
+# Include all template files
+recursive-include templates *.py
+recursive-include templates *.yaml
+recursive-include templates *.yml
+recursive-include templates *.json
+recursive-include templates *.toml
+recursive-include templates *.cfg
+recursive-include templates *.ini
+recursive-include templates *.conf
+recursive-include templates *.md
+recursive-include templates *.txt
+recursive-include templates *.jinja2
+recursive-include templates *.j2
+
+# Include documentation
+recursive-include docs *.md
+recursive-include docs *.rst
+recursive-include docs *.txt
+recursive-include docs *.py
+recursive-include docs *.yaml
+recursive-include docs *.yml
+
+# Include examples
+recursive-include examples *.py
+recursive-include examples *.yaml
+recursive-include examples *.yml
+recursive-include examples *.json
+recursive-include examples *.md
+recursive-include examples *.txt
+recursive-include examples *.dockerfile
+recursive-include examples Dockerfile*
+recursive-include examples docker-compose*.yml
+recursive-include examples *.env.example
+
+# Include test files
+recursive-include tests *.py
+recursive-include tests *.yaml
+recursive-include tests *.yml
+recursive-include tests *.json
+
+# Include configuration files
+include .gitignore
+include .pre-commit-config.yaml
+include .github/workflows/*.yml
+include .github/workflows/*.yaml
+include tox.ini
+include pytest.ini
+include mypy.ini
+include .flake8
+include .isort.cfg
+
+# Exclude compiled Python files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.pyd
+global-exclude __pycache__
+global-exclude .pytest_cache
+global-exclude .mypy_cache
+global-exclude .coverage
+global-exclude htmlcov
+
+# Exclude development and build artifacts
+global-exclude .git*
+global-exclude .DS_Store
+global-exclude Thumbs.db
+global-exclude *.egg-info
+global-exclude build
+global-exclude dist
+global-exclude .tox
+global-exclude .venv
+global-exclude venv
+global-exclude env

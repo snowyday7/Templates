@@ -1,0 +1,53 @@
+# Core dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+sqlalchemy>=2.0.0
+alembic>=1.12.0
+psycopg2-binary>=2.9.0
+pymysql>=1.1.0
+redis>=5.0.0
+celery>=5.3.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+python-multipart>=0.0.6
+
+# Monitoring and logging
+sentry-sdk[fastapi]>=1.38.0
+prometheus-client>=0.19.0
+psutil>=5.9.0
+structlog>=23.2.0
+
+# Caching and message queue
+aioredis>=2.0.0
+rabbitmq>=0.2.0
+websockets>=12.0
+
+# Development and testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.1.0
+black>=23.11.0
+flake8>=6.1.0
+isort>=5.12.0
+mypy>=1.7.0
+
+# Deployment and configuration
+docker>=6.1.0
+kubernetes>=28.1.0
+pyyaml>=6.0.1
+jinja2>=3.1.0
+click>=8.1.0
+
+# Security
+cryptography>=41.0.0
+bcrypt>=4.1.0
+
+# Utilities
+requests>=2.31.0
+httpx>=0.25.0
+aiofiles>=23.2.0
+python-dotenv>=1.0.0
+typer>=0.9.0
+rich>=13.7.0

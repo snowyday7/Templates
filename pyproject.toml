@@ -1,0 +1,298 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "python-backend-templates"
+version = "1.0.0"
+description = "全面、强大的Python后端开发功能组件模板库"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Python Backend Templates Team", email = "support@python-templates.com"},
+]
+maintainers = [
+    {name = "Python Backend Templates Team", email = "support@python-templates.com"},
+]
+keywords = [
+    "python",
+    "backend",
+    "templates",
+    "fastapi",
+    "sqlalchemy",
+    "redis",
+    "celery",
+    "docker",
+    "kubernetes",
+    "microservices",
+    "api",
+    "orm",
+    "authentication",
+    "authorization",
+    "monitoring",
+    "logging",
+    "deployment",
+    "devops",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Database",
+    "Topic :: System :: Monitoring",
+    "Framework :: FastAPI",
+    "Framework :: AsyncIO",
+]
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.12.0",
+    "psycopg2-binary>=2.9.0",
+    "pymysql>=1.1.0",
+    "redis>=5.0.0",
+    "celery>=5.3.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.6",
+    "sentry-sdk[fastapi]>=1.38.0",
+    "prometheus-client>=0.19.0",
+    "psutil>=5.9.0",
+    "structlog>=23.2.0",
+    "aioredis>=2.0.0",
+    "rabbitmq>=0.2.0",
+    "websockets>=12.0",
+    "docker>=6.1.0",
+    "kubernetes>=28.1.0",
+    "pyyaml>=6.0.1",
+    "jinja2>=3.1.0",
+    "click>=8.1.0",
+    "cryptography>=41.0.0",
+    "bcrypt>=4.1.0",
+    "requests>=2.31.0",
+    "httpx>=0.25.0",
+    "aiofiles>=23.2.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.9.0",
+    "rich>=13.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "black>=23.11.0",
+    "flake8>=6.1.0",
+    "isort>=5.12.0",
+    "mypy>=1.7.0",
+    "pre-commit>=3.5.0",
+    "bandit>=1.7.5",
+    "safety>=2.3.0",
+]
+docs = [
+    "sphinx>=7.2.0",
+    "sphinx-rtd-theme>=1.3.0",
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.4.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+testing = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "factory-boy>=3.3.0",
+    "faker>=20.1.0",
+    "hypothesis>=6.92.0",
+    "httpx>=0.25.0",
+    "requests-mock>=1.11.0",
+]
+monitoring = [
+    "sentry-sdk[fastapi]>=1.38.0",
+    "prometheus-client>=0.19.0",
+    "structlog>=23.2.0",
+    "psutil>=5.9.0",
+]
+deployment = [
+    "docker>=6.1.0",
+    "kubernetes>=28.1.0",
+    "pyyaml>=6.0.1",
+    "jinja2>=3.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-username/python-backend-templates"
+Documentation = "https://python-templates.readthedocs.io"
+Repository = "https://github.com/your-username/python-backend-templates.git"
+"Bug Tracker" = "https://github.com/your-username/python-backend-templates/issues"
+Changelog = "https://github.com/your-username/python-backend-templates/blob/main/CHANGELOG.md"
+
+[project.scripts]
+python-templates = "templates.cli:main"
+pt-create = "templates.cli:create_project"
+pt-init = "templates.cli:init_template"
+
+[tool.setuptools.packages.find]
+where = ["."] 
+include = ["templates*"]
+exclude = ["tests*", "docs*", "examples*"]
+
+[tool.setuptools.package-data]
+templates = [
+    "**/*.py",
+    "**/*.yaml",
+    "**/*.yml",
+    "**/*.json",
+    "**/*.toml",
+    "**/*.cfg",
+    "**/*.ini",
+    "**/*.conf",
+    "**/*.md",
+    "**/*.txt",
+    "**/*.jinja2",
+    "**/*.j2",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+(
+  /(
+      \.eggs
+    | \.git
+    | \.hg
+    | \.mypy_cache
+    | \.tox
+    | \.venv
+    | _build
+    | buck-out
+    | build
+    | dist
+  )/
+)
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "celery.*",
+    "redis.*",
+    "sqlalchemy.*",
+    "alembic.*",
+    "psycopg2.*",
+    "pymysql.*",
+    "docker.*",
+    "kubernetes.*",
+    "sentry_sdk.*",
+    "prometheus_client.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "database: marks tests that require database",
+    "redis: marks tests that require redis",
+    "docker: marks tests that require docker",
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["templates"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/*_test.py",
+    "*/conftest.py",
+    "*/venv/*",
+    "*/env/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv", "env"]
+skips = ["B101", "B601"]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "docs/source/conf.py",
+    "old",
+    "build",
+    "dist",
+    ".venv",
+    "venv",
+    "env",
+    ".tox",
+    ".eggs",
+    "*.egg",
+]
