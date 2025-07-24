@@ -1,0 +1,444 @@
+# Nginx Ingress Controller配置
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: enterprise-app-ingress
+  namespace: enterprise-app
+  labels:
+    app: enterprise-app
+    component: ingress
+  annotations:
+    # Nginx配置
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    
+    # 限流配置
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-connections: "10"
+    
+    # CORS配置
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://app.company.com,https://admin.company.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    
+    # 安全配置
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; media-src 'self'; object-src 'none'; child-src 'none'; frame-src 'none'; worker-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self';" always;
+    
+    # 证书管理
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/acme-challenge-type: "http01"
+    
+    # 缓存配置
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+      }
+      location /api/ {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+      }
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.company.com
+    - app.company.com
+    - monitoring.company.com
+    secretName: enterprise-app-tls
+  rules:
+  # API服务
+  - host: api.company.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: enterprise-app-service
+            port:
+              number: 80
+  # 前端应用
+  - host: app.company.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend-service
+            port:
+              number: 80
+  # 监控服务
+  - host: monitoring.company.com
+    http:
+      paths:
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana-service
+            port:
+              number: 3000
+      - path: /prometheus
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-service
+            port:
+              number: 9090
+      - path: /alertmanager
+        pathType: Prefix
+        backend:
+          service:
+            name: alertmanager-service
+            port:
+              number: 9093
+      - path: /jaeger
+        pathType: Prefix
+        backend:
+          service:
+            name: jaeger-service
+            port:
+              number: 16686
+---
+# 内部服务Ingress（仅限内网访问）
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: enterprise-app-internal-ingress
+  namespace: enterprise-app
+  labels:
+    app: enterprise-app
+    component: internal-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    nginx.ingress.kubernetes.io/auth-type: "basic"
+    nginx.ingress.kubernetes.io/auth-secret: "basic-auth-secret"
+    nginx.ingress.kubernetes.io/auth-realm: "Enterprise App Internal Services"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - internal.company.com
+    secretName: enterprise-app-internal-tls
+  rules:
+  - host: internal.company.com
+    http:
+      paths:
+      # 数据库管理
+      - path: /pgadmin
+        pathType: Prefix
+        backend:
+          service:
+            name: pgadmin-service
+            port:
+              number: 80
+      # Redis管理
+      - path: /redis-commander
+        pathType: Prefix
+        backend:
+          service:
+            name: redis-commander-service
+            port:
+              number: 8081
+      # RabbitMQ管理
+      - path: /rabbitmq
+        pathType: Prefix
+        backend:
+          service:
+            name: rabbitmq-service
+            port:
+              number: 15672
+---
+# HAProxy负载均衡器配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config
+  namespace: enterprise-app
+data:
+  haproxy.cfg: |
+    global
+        daemon
+        log stdout local0
+        chroot /var/lib/haproxy
+        stats socket /run/haproxy/admin.sock mode 660 level admin
+        stats timeout 30s
+        user haproxy
+        group haproxy
+        
+        # SSL配置
+        ssl-default-bind-ciphers ECDHE+AESGCM:ECDHE+CHACHA20:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS
+        ssl-default-bind-options ssl-min-ver TLSv1.2 no-tls-tickets
+        
+    defaults
+        mode http
+        log global
+        option httplog
+        option dontlognull
+        option log-health-checks
+        option forwardfor
+        option http-server-close
+        timeout connect 5000
+        timeout client 50000
+        timeout server 50000
+        errorfile 400 /etc/haproxy/errors/400.http
+        errorfile 403 /etc/haproxy/errors/403.http
+        errorfile 408 /etc/haproxy/errors/408.http
+        errorfile 500 /etc/haproxy/errors/500.http
+        errorfile 502 /etc/haproxy/errors/502.http
+        errorfile 503 /etc/haproxy/errors/503.http
+        errorfile 504 /etc/haproxy/errors/504.http
+        
+    # 统计页面
+    frontend stats
+        bind *:8404
+        stats enable
+        stats uri /stats
+        stats refresh 30s
+        stats admin if TRUE
+        
+    # HTTP前端
+    frontend http_frontend
+        bind *:80
+        redirect scheme https code 301 if !{ ssl_fc }
+        
+    # HTTPS前端
+    frontend https_frontend
+        bind *:443 ssl crt /etc/ssl/certs/enterprise-app.pem
+        
+        # 安全头
+        http-response set-header X-Frame-Options SAMEORIGIN
+        http-response set-header X-Content-Type-Options nosniff
+        http-response set-header X-XSS-Protection "1; mode=block"
+        http-response set-header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        
+        # 路由规则
+        acl is_api hdr(host) -i api.company.com
+        acl is_app hdr(host) -i app.company.com
+        acl is_monitoring hdr(host) -i monitoring.company.com
+        
+        use_backend api_backend if is_api
+        use_backend app_backend if is_app
+        use_backend monitoring_backend if is_monitoring
+        
+        default_backend api_backend
+        
+    # API后端
+    backend api_backend
+        balance roundrobin
+        option httpchk GET /health
+        http-check expect status 200
+        
+        server app1 enterprise-app-service:80 check
+        
+    # 前端应用后端
+    backend app_backend
+        balance roundrobin
+        option httpchk GET /
+        http-check expect status 200
+        
+        server frontend1 frontend-service:80 check
+        
+    # 监控后端
+    backend monitoring_backend
+        balance roundrobin
+        
+        acl is_grafana path_beg /grafana
+        acl is_prometheus path_beg /prometheus
+        acl is_alertmanager path_beg /alertmanager
+        acl is_jaeger path_beg /jaeger
+        
+        use-server grafana if is_grafana
+        use-server prometheus if is_prometheus
+        use-server alertmanager if is_alertmanager
+        use-server jaeger if is_jaeger
+        
+        server grafana grafana-service:3000 check
+        server prometheus prometheus-service:9090 check
+        server alertmanager alertmanager-service:9093 check
+        server jaeger jaeger-service:16686 check
+---
+# HAProxy部署
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haproxy
+  namespace: enterprise-app
+  labels:
+    app: haproxy
+    component: load-balancer
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: haproxy
+  template:
+    metadata:
+      labels:
+        app: haproxy
+        component: load-balancer
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8404"
+    spec:
+      containers:
+      - name: haproxy
+        image: haproxy:2.8-alpine
+        ports:
+        - name: http
+          containerPort: 80
+        - name: https
+          containerPort: 443
+        - name: stats
+          containerPort: 8404
+        volumeMounts:
+        - name: haproxy-config
+          mountPath: /usr/local/etc/haproxy
+        - name: ssl-certs
+          mountPath: /etc/ssl/certs
+          readOnly: true
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /stats
+            port: stats
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /stats
+            port: stats
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE
+      volumes:
+      - name: haproxy-config
+        configMap:
+          name: haproxy-config
+      - name: ssl-certs
+        secret:
+          secretName: enterprise-app-tls
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - haproxy
+              topologyKey: kubernetes.io/hostname
+---
+# HAProxy服务
+apiVersion: v1
+kind: Service
+metadata:
+  name: haproxy-service
+  namespace: enterprise-app
+  labels:
+    app: haproxy
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8404"
+spec:
+  type: LoadBalancer
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+  - name: https
+    port: 443
+    targetPort: https
+  - name: stats
+    port: 8404
+    targetPort: stats
+  selector:
+    app: haproxy
+---
+# 基础认证密钥
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth-secret
+  namespace: enterprise-app
+type: Opaque
+data:
+  auth: YWRtaW46JGFwcjEkSDY1dnVhNzAkLnRiTXhPbGRPdGVxWjBGUUZxdGNlLw==  # admin:admin_password
+---
+# TLS证书（Let's Encrypt）
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: devops@company.com
+    privateKeySecretRef:
+      name: letsencrypt-prod
+    solvers:
+    - http01:
+        ingress:
+          class: nginx
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: enterprise-app-cert
+  namespace: enterprise-app
+spec:
+  secretName: enterprise-app-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - api.company.com
+  - app.company.com
+  - monitoring.company.com
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: enterprise-app-internal-cert
+  namespace: enterprise-app
+spec:
+  secretName: enterprise-app-internal-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - internal.company.com

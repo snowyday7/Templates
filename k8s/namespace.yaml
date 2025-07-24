@@ -1,0 +1,98 @@
+# Kubernetes命名空间配置
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: enterprise-app
+  labels:
+    name: enterprise-app
+    environment: production
+    app.kubernetes.io/name: enterprise-app
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: namespace
+    app.kubernetes.io/part-of: enterprise-platform
+    app.kubernetes.io/managed-by: kubernetes
+  annotations:
+    description: "企业级应用生产环境命名空间"
+    contact: "devops@company.com"
+    cost-center: "engineering"
+---
+# 资源配额
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: enterprise-app-quota
+  namespace: enterprise-app
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    limits.cpu: "20"
+    limits.memory: 40Gi
+    persistentvolumeclaims: "10"
+    services: "20"
+    secrets: "20"
+    configmaps: "20"
+    pods: "50"
+---
+# 限制范围
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: enterprise-app-limits
+  namespace: enterprise-app
+spec:
+  limits:
+  - default:
+      cpu: "1"
+      memory: "1Gi"
+    defaultRequest:
+      cpu: "100m"
+      memory: "128Mi"
+    type: Container
+  - max:
+      cpu: "4"
+      memory: "8Gi"
+    min:
+      cpu: "50m"
+      memory: "64Mi"
+    type: Container
+---
+# 网络策略
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: enterprise-app-network-policy
+  namespace: enterprise-app
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: enterprise-app
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: enterprise-app
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80

@@ -1,0 +1,562 @@
+# 应用主配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: enterprise-app
+  labels:
+    app: enterprise-app
+    component: config
+data:
+  # 应用基础配置
+  app-name: "Enterprise Application"
+  app-version: "1.0.0"
+  app-environment: "production"
+  app-debug: "false"
+  app-log-level: "INFO"
+  
+  # 服务端口配置
+  app-port: "8000"
+  metrics-port: "8001"
+  health-port: "8002"
+  
+  # 数据库配置
+  db-host: "postgres-master-service"
+  db-port: "5432"
+  db-name: "enterprise_app"
+  db-read-host: "postgres-slave-service"
+  db-pool-size: "20"
+  db-max-overflow: "30"
+  db-pool-timeout: "30"
+  db-pool-recycle: "3600"
+  
+  # Redis配置
+  redis-host: "redis-master-service"
+  redis-port: "6379"
+  redis-db: "0"
+  redis-sentinel-service: "redis-sentinel-service"
+  redis-sentinel-port: "26379"
+  redis-master-name: "mymaster"
+  redis-pool-size: "50"
+  redis-timeout: "5"
+  
+  # 消息队列配置
+  rabbitmq-host: "rabbitmq-service"
+  rabbitmq-port: "5672"
+  rabbitmq-management-port: "15672"
+  rabbitmq-vhost: "/"
+  
+  # 可观测性配置
+  jaeger-endpoint: "http://jaeger-service:14268/api/traces"
+  jaeger-agent-host: "jaeger-service"
+  jaeger-agent-port: "6831"
+  prometheus-gateway-url: "http://prometheus-pushgateway:9091"
+  
+  # SMTP配置
+  smtp-host: "smtp.company.com"
+  smtp-port: "587"
+  smtp-use-tls: "true"
+  smtp-from-email: "noreply@company.com"
+  smtp-from-name: "Enterprise Application"
+  
+  # 安全配置
+  jwt-algorithm: "HS256"
+  jwt-expire-minutes: "30"
+  api-key-expire-days: "365"
+  password-min-length: "8"
+  password-require-uppercase: "true"
+  password-require-lowercase: "true"
+  password-require-numbers: "true"
+  password-require-symbols: "true"
+  
+  # 限流配置
+  rate-limit-requests: "100"
+  rate-limit-window: "60"
+  rate-limit-burst: "20"
+  
+  # 缓存配置
+  cache-default-ttl: "3600"
+  cache-max-size: "1000"
+  
+  # 文件上传配置
+  upload-max-size: "52428800"  # 50MB
+  upload-allowed-types: "image/jpeg,image/png,image/gif,application/pdf,text/plain"
+  upload-path: "/app/uploads"
+  
+  # 分页配置
+  pagination-default-size: "20"
+  pagination-max-size: "100"
+  
+  # 国际化配置
+  default-language: "en"
+  supported-languages: "en,zh,es,fr,de,ja"
+  timezone: "UTC"
+  
+  # 特性开关
+  feature-user-registration: "true"
+  feature-email-verification: "true"
+  feature-two-factor-auth: "true"
+  feature-social-login: "true"
+  feature-api-versioning: "true"
+  feature-rate-limiting: "true"
+  feature-audit-logging: "true"
+  feature-data-export: "true"
+  feature-advanced-search: "true"
+  feature-real-time-notifications: "true"
+---
+# Prometheus配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: enterprise-app
+  labels:
+    app: prometheus
+    component: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels:
+        cluster: 'enterprise-app'
+        environment: 'production'
+    
+    rule_files:
+    - "/etc/prometheus/rules/*.yml"
+    
+    alerting:
+      alertmanagers:
+      - static_configs:
+        - targets:
+          - alertmanager-service:9093
+    
+    scrape_configs:
+    # Prometheus自身
+    - job_name: 'prometheus'
+      static_configs:
+      - targets: ['localhost:9090']
+    
+    # Kubernetes API Server
+    - job_name: 'kubernetes-apiservers'
+      kubernetes_sd_configs:
+      - role: endpoints
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: default;kubernetes;https
+    
+    # Kubernetes节点
+    - job_name: 'kubernetes-nodes'
+      kubernetes_sd_configs:
+      - role: node
+      scheme: https
+      tls_config:
+        ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+      bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+      relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+    
+    # Kubernetes Pods
+    - job_name: 'kubernetes-pods'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+    
+    # 应用服务
+    - job_name: 'enterprise-app'
+      static_configs:
+      - targets: ['enterprise-app-service:8001']
+      metrics_path: '/metrics'
+      scrape_interval: 30s
+    
+    # PostgreSQL
+    - job_name: 'postgres'
+      static_configs:
+      - targets: 
+        - 'postgres-master-service:9187'
+        - 'postgres-slave-service:9187'
+      metrics_path: '/metrics'
+      scrape_interval: 30s
+    
+    # Redis
+    - job_name: 'redis'
+      static_configs:
+      - targets:
+        - 'redis-master-service:9121'
+        - 'redis-slave-service:9121'
+      metrics_path: '/metrics'
+      scrape_interval: 30s
+    
+    # RabbitMQ
+    - job_name: 'rabbitmq'
+      static_configs:
+      - targets: ['rabbitmq-service:15692']
+      metrics_path: '/metrics'
+      scrape_interval: 30s
+    
+    # Nginx Ingress
+    - job_name: 'nginx-ingress'
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+          - ingress-nginx
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+        action: keep
+        regex: ingress-nginx
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+        action: keep
+        regex: controller
+      - source_labels: [__address__]
+        action: replace
+        regex: ([^:]+)(?::\d+)?
+        replacement: $1:10254
+        target_label: __address__
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: instance
+---
+# Prometheus告警规则
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: enterprise-app
+  labels:
+    app: prometheus
+    component: monitoring
+data:
+  app-rules.yml: |
+    groups:
+    - name: enterprise-app
+      rules:
+      # 应用健康检查
+      - alert: AppDown
+        expr: up{job="enterprise-app"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Enterprise App is down"
+          description: "Enterprise App has been down for more than 1 minute."
+      
+      # 高错误率
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second."
+      
+      # 高响应时间
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }} seconds."
+      
+      # 高CPU使用率
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{pod=~"enterprise-app-.*"}[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}%."
+      
+      # 高内存使用率
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes{pod=~"enterprise-app-.*"} / container_spec_memory_limit_bytes > 0.9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }}%."
+  
+  database-rules.yml: |
+    groups:
+    - name: database
+      rules:
+      # 数据库连接数过高
+      - alert: HighDatabaseConnections
+        expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High database connections"
+          description: "Database connections are at {{ $value }}% of maximum."
+      
+      # 数据库复制延迟
+      - alert: DatabaseReplicationLag
+        expr: pg_stat_replication_replay_lag > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database replication lag"
+          description: "Replication lag is {{ $value }} seconds."
+      
+      # 数据库磁盘空间不足
+      - alert: DatabaseDiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/var/lib/postgresql/data"} / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database disk space low"
+          description: "Database disk space is {{ $value }}% full."
+  
+  redis-rules.yml: |
+    groups:
+    - name: redis
+      rules:
+      # Redis内存使用率过高
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high memory usage"
+          description: "Redis memory usage is {{ $value }}%."
+      
+      # Redis连接数过高
+      - alert: RedisHighConnections
+        expr: redis_connected_clients > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis high connections"
+          description: "Redis has {{ $value }} connected clients."
+      
+      # Redis主从同步延迟
+      - alert: RedisMasterSlaveDelay
+        expr: redis_master_repl_offset - redis_slave_repl_offset > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis master-slave delay"
+          description: "Redis replication delay is {{ $value }} bytes."
+---
+# AlertManager配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: enterprise-app
+  labels:
+    app: alertmanager
+    component: monitoring
+data:
+  alertmanager.yml: |
+    global:
+      smtp_smarthost: 'smtp.company.com:587'
+      smtp_from: 'alerts@company.com'
+      smtp_auth_username: 'alerts@company.com'
+      smtp_auth_password: 'smtp_password'
+      slack_api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+    
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 1h
+      receiver: 'default'
+      routes:
+      - match:
+          severity: critical
+        receiver: 'critical-alerts'
+      - match:
+          severity: warning
+        receiver: 'warning-alerts'
+    
+    receivers:
+    - name: 'default'
+      email_configs:
+      - to: 'devops@company.com'
+        subject: '[{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          {{ end }}
+    
+    - name: 'critical-alerts'
+      email_configs:
+      - to: 'devops@company.com,oncall@company.com'
+        subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          {{ end }}
+      slack_configs:
+      - channel: '#alerts'
+        title: '[CRITICAL] {{ .GroupLabels.alertname }}'
+        text: |
+          {{ range .Alerts }}
+          {{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          {{ end }}
+    
+    - name: 'warning-alerts'
+      email_configs:
+      - to: 'devops@company.com'
+        subject: '[WARNING] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          {{ end }}
+    
+    inhibit_rules:
+    - source_match:
+        severity: 'critical'
+      target_match:
+        severity: 'warning'
+      equal: ['alertname', 'cluster', 'service']
+---
+# Grafana配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  namespace: enterprise-app
+  labels:
+    app: grafana
+    component: monitoring
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      access: proxy
+      url: http://prometheus-service:9090
+      isDefault: true
+      editable: true
+    - name: Jaeger
+      type: jaeger
+      access: proxy
+      url: http://jaeger-service:16686
+      editable: true
+  
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      updateIntervalSeconds: 10
+      allowUiUpdates: true
+      options:
+        path: /var/lib/grafana/dashboards
+---
+# Grafana仪表板
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: enterprise-app
+  labels:
+    app: grafana
+    component: monitoring
+data:
+  app-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Enterprise App Overview",
+        "tags": ["enterprise", "app"],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+          {
+            "id": 1,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total[5m])",
+                "legendFormat": "{{method}} {{status}}"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Response Time",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "95th percentile"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Error Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+                "legendFormat": "5xx errors"
+              }
+            ]
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "refresh": "30s"
+      }
+    }

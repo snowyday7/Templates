@@ -1,0 +1,464 @@
+# PostgreSQL主数据库部署
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-master
+  namespace: enterprise-app
+  labels:
+    app: postgres
+    role: master
+    component: database
+spec:
+  serviceName: postgres-master-service
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      role: master
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: master
+        component: database
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9187"
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - name: postgres
+          containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: database-name
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        - name: POSTGRES_REPLICATION_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: replication-username
+        - name: POSTGRES_REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: replication-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      - name: postgres-exporter
+        image: prometheuscommunity/postgres-exporter:latest
+        ports:
+        - name: metrics
+          containerPort: 9187
+        env:
+        - name: DATA_SOURCE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: exporter-dsn
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+      - name: postgres-init
+        configMap:
+          name: postgres-init
+          defaultMode: 0755
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 100Gi
+---
+# PostgreSQL从数据库部署
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-slave
+  namespace: enterprise-app
+  labels:
+    app: postgres
+    role: slave
+    component: database
+spec:
+  serviceName: postgres-slave-service
+  replicas: 2
+  selector:
+    matchLabels:
+      app: postgres
+      role: slave
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: slave
+        component: database
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9187"
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - name: postgres
+          containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: database-name
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: username
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        - name: POSTGRES_MASTER_HOST
+          value: postgres-master-service
+        - name: POSTGRES_REPLICATION_USER
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: replication-username
+        - name: POSTGRES_REPLICATION_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: replication-password
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-config
+          mountPath: /etc/postgresql
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false
+          capabilities:
+            drop:
+            - ALL
+      - name: postgres-exporter
+        image: prometheuscommunity/postgres-exporter:latest
+        ports:
+        - name: metrics
+          containerPort: 9187
+        env:
+        - name: DATA_SOURCE_NAME
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: exporter-dsn
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+      - name: postgres-init
+        configMap:
+          name: postgres-init
+          defaultMode: 0755
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: fast-ssd
+      resources:
+        requests:
+          storage: 100Gi
+---
+# PostgreSQL主数据库服务
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-master-service
+  namespace: enterprise-app
+  labels:
+    app: postgres
+    role: master
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9187"
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: postgres
+  - name: metrics
+    port: 9187
+    targetPort: metrics
+  selector:
+    app: postgres
+    role: master
+---
+# PostgreSQL从数据库服务
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-slave-service
+  namespace: enterprise-app
+  labels:
+    app: postgres
+    role: slave
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9187"
+spec:
+  type: ClusterIP
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: postgres
+  - name: metrics
+    port: 9187
+    targetPort: metrics
+  selector:
+    app: postgres
+    role: slave
+---
+# PostgreSQL配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: enterprise-app
+data:
+  database-name: "enterprise_db"
+  postgresql.conf: |
+    # 连接设置
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    
+    # 内存设置
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    work_mem = 4MB
+    maintenance_work_mem = 64MB
+    
+    # WAL设置
+    wal_level = replica
+    max_wal_senders = 3
+    max_replication_slots = 3
+    wal_keep_size = 1GB
+    
+    # 检查点设置
+    checkpoint_completion_target = 0.9
+    wal_buffers = 16MB
+    
+    # 日志设置
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'log'
+    log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log'
+    log_statement = 'all'
+    log_min_duration_statement = 1000
+    
+    # 性能设置
+    random_page_cost = 1.1
+    effective_io_concurrency = 200
+  
+  pg_hba.conf: |
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    local   all             all                                     trust
+    host    all             all             127.0.0.1/32            md5
+    host    all             all             ::1/128                 md5
+    host    all             all             0.0.0.0/0               md5
+    host    replication     replicator      0.0.0.0/0               md5
+---
+# PostgreSQL初始化脚本
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: enterprise-app
+data:
+  01-init-replication.sh: |
+    #!/bin/bash
+    set -e
+    
+    # 创建复制用户
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        CREATE USER $POSTGRES_REPLICATION_USER REPLICATION LOGIN CONNECTION LIMIT 3 ENCRYPTED PASSWORD '$POSTGRES_REPLICATION_PASSWORD';
+    EOSQL
+    
+    # 创建应用数据库和用户
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+        CREATE DATABASE enterprise_app;
+        CREATE USER app_user WITH ENCRYPTED PASSWORD 'app_password';
+        GRANT ALL PRIVILEGES ON DATABASE enterprise_app TO app_user;
+        
+        CREATE DATABASE grafana;
+        CREATE USER grafana_user WITH ENCRYPTED PASSWORD 'grafana_password';
+        GRANT ALL PRIVILEGES ON DATABASE grafana TO grafana_user;
+    EOSQL
+  
+  02-init-slave.sh: |
+    #!/bin/bash
+    set -e
+    
+    if [ "$POSTGRES_MASTER_HOST" ]; then
+        echo "Initializing slave database..."
+        
+        # 等待主数据库启动
+        until pg_isready -h $POSTGRES_MASTER_HOST -p 5432 -U $POSTGRES_REPLICATION_USER; do
+            echo "Waiting for master database..."
+            sleep 2
+        done
+        
+        # 如果数据目录为空，则从主数据库复制
+        if [ ! -s "$PGDATA/PG_VERSION" ]; then
+            echo "Copying data from master..."
+            pg_basebackup -h $POSTGRES_MASTER_HOST -D $PGDATA -U $POSTGRES_REPLICATION_USER -v -P -W
+            
+            # 创建恢复配置
+            cat > $PGDATA/postgresql.auto.conf <<EOF
+    primary_conninfo = 'host=$POSTGRES_MASTER_HOST port=5432 user=$POSTGRES_REPLICATION_USER'
+    promote_trigger_file = '/tmp/promote_trigger'
+    EOF
+            
+            touch $PGDATA/standby.signal
+        fi
+    fi
+---
+# PostgreSQL密钥
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: enterprise-app
+type: Opaque
+data:
+  username: cG9zdGdyZXM=  # postgres
+  password: cG9zdGdyZXNfcGFzc3dvcmQ=  # postgres_password
+  replication-username: cmVwbGljYXRvcg==  # replicator
+  replication-password: cmVwbGljYXRvcl9wYXNzd29yZA==  # replicator_password
+  exporter-dsn: cG9zdGdyZXNxbDovL3Bvc3RncmVzOnBvc3RncmVzX3Bhc3N3b3JkQGxvY2FsaG9zdDo1NDMyL2VudGVycHJpc2VfZGI/c3NsbW9kZT1kaXNhYmxl  # postgresql://postgres:postgres_password@localhost:5432/enterprise_db?sslmode=disable
